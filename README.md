@@ -170,7 +170,8 @@ gofmt -l .
 go vet -tags=contract_probe ./...   # 编译探针
 ```
 
-CI 会额外校验零第三方依赖（`go list -m all` 只有本模块）。
+CI 会额外校验零第三方依赖（`go list -m all` 只有本模块），并检查 `.codegraph/`、`.cache/`
+没有被提交。`.codegraph/` 是本地代码索引，已在 `.gitignore` 中忽略。
 
 ## 文档
 

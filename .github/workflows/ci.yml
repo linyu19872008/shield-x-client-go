@@ -49,3 +49,13 @@ jobs:
           n="$(go list -m all | wc -l | tr -d ' ')"
           echo "modules: $n"
           test "$n" -eq 1
+
+      - name: forbid local caches in git
+        run: |
+          tracked="$(git ls-files | grep -E '(^|/)\.(codegraph|cache)/' || true)"
+          if [ -n "$tracked" ]; then
+            echo "::error::以下本地缓存不应提交到仓库："
+            echo "$tracked"
+            exit 1
+          fi
+          echo "OK：未跟踪 .codegraph / .cache"
