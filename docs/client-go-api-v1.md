@@ -1,6 +1,6 @@
 # shield-x-client-go Public API v1.0
 
-> **状态**：v1.0 草案（D1 / D2 / D11 待批准后冻结）
+> **状态**：v1.0（D1 / D2 / D11 已落地）
 > **日期**：2026-11-14
 > **契约版本**：`agent-v1`
 > **适用对象**：接入 shield-x 的 gateway 开发方
@@ -33,17 +33,17 @@
 
 | # | 决策 | 本草案取值 | 状态 |
 |---|---|---|---|
-| D1 | 是否内置 Poller / Reporter / Spool / Stats / Transport | **分层内置**：核心 `agent` 只做传输与模型；助手为同仓独立包 | 待批准 |
-| D2 | 是否保留 CI 版 raw probe | **保留最小版**：约 10 条协议断言，禁止 import `agent` | 待批准 |
-| D3 | `BaseURL` 是否包含 `/shieldx` 前缀 | **包含**，便于反向代理改前缀 | 推荐默认 |
-| D4 | `AgentVersion` 必填还是默认 `unknown` | **必填** | 推荐默认 |
-| D5 | 事件时间用 `time.Time` 还是 `string` | **`time.Time`** | 推荐默认 |
-| D6 | 条件值用命名 `Value` 类型还是 `any` | **命名类型** | 推荐默认 |
-| D7 | 动作参数用强类型还是 `map[string]any` | **强类型** | 推荐默认 |
-| D8 | `reporter.State` 是否必填 | **必填** | 推荐默认 |
-| D9 | Spool 默认是否开启 | **默认关闭**，显式启用 | 推荐默认 |
-| D10 | Go 最低版本 | **1.22** | 推荐默认 |
-| D11 | 是否先修 shield-x 的 429 `Retry-After` 响应头顺序 | **先修**（见 §12） | 待批准 |
+| D1 | 是否内置 Poller / Reporter / Spool / Stats / Transport | **分层内置**：核心 `agent` 只做传输与模型；助手为同仓独立包 | 已落地（阶段 2） |
+| D2 | 是否保留 CI 版 raw probe | **保留最小版**：约 10 条协议断言，禁止 import `agent` | 已落地（阶段 3） |
+| D3 | `BaseURL` 是否包含 `/shieldx` 前缀 | **包含**，便于反向代理改前缀 | 已实现 |
+| D4 | `AgentVersion` 必填还是默认 `unknown` | **必填** | 已实现 |
+| D5 | 事件时间用 `time.Time` 还是 `string` | **`time.Time`** | 已实现 |
+| D6 | 条件值用命名 `Value` 类型还是 `any` | **命名类型** | 已实现 |
+| D7 | 动作参数用强类型还是 `map[string]any` | **强类型** | 已实现 |
+| D8 | `reporter.State` 是否必填 | **必填** | 已实现 |
+| D9 | Spool 默认是否开启 | **默认关闭**，显式启用 | 已实现 |
+| D10 | Go 最低版本 | **1.22** | 已实现 |
+| D11 | 是否先修 shield-x 的 429 `Retry-After` 响应头顺序 | **先修**（见 §12） | 已修复（shield-x `5fdc2a1`） |
 
 ---
 
@@ -694,20 +694,30 @@ SHIELDX_TOKEN=sx_xxx \
 go test -tags=contract_probe ./probe -v
 ```
 
+| 环境变量 | 必填 | 用途 |
+|---|---|---|
+| `SHIELDX_BASE_URL` | 是 | 含 `/shieldx` 前缀的基地址 |
+| `SHIELDX_TOKEN` | 是 | 租户 Token |
+| `SHIELDX_GATEWAY_ID` | 否 | 默认 `gw-probe-01` |
+| `SHIELDX_PROBE_EMPTY_TOKEN` | 否 | P4 空策略租户 |
+| `SHIELDX_PROBE_TOKEN_B` | 否 | P9 跨租户隔离 |
+
+探针只 import 标准库，**不得 import `agent`**；CI 的 `go vet -tags=contract_probe ./...` 会编译它，`go list -deps` 可检查依赖。
+
 | # | 断言 | 对应契约 |
 |---|---|---|
 | P1 | 无 Token → 401，信封含 `code/message/request_id` | §2.1、§4.7 |
 | P2 | 带 Token + Capabilities → 200，`policy_count == len(policies)` | §4.2 |
 | P3 | 带 `If-None-Match: "rev-N"` → 304，空 body，有 ETag | §4.3 |
 | P4 | 空策略租户 → 200 + `policies: []`，不是错误 | §4.4 |
-| P5 | JSON 批次 → 202，`accepted+rejected == 发送数`（采样租户除外） | §6.7 |
+| P5 | JSON 批次 → 202，`accepted+rejected <= 发送数`（采样租户会少） | §6.7 |
 | P6 | NDJSON + gzip → 202 | §6.2 |
 | P7 | 1001 条 → 413 `BATCH_TOO_LARGE` | §6.8 |
 | P8 | 触发限流 → 429 且带 `Retry-After` | §6.8 |
 | P9 | 两个租户 Token 拿到的策略集合不相交 | §12 E1 |
 | P10 | 非法 body → 400，错误码稳定 | §4.7 |
 
-环境不满足的用例显式 `t.Skip` 并打印原因，不静默通过。
+环境不满足的用例显式 `t.Skip` 并打印原因，不静默通过。P8 需要服务端限流或队列压力，默认 `Skip`，由 shield-x 的服务端单测覆盖。
 
 ---
 
@@ -756,6 +766,7 @@ README 必须包含快速开始、兼容矩阵、probe 用法。
 |---|---|---|
 | v1.0-draft | 2026-11-14 | 首版：核心 client、poller、reporter、spool、transport 注入、错误模型、测试矩阵与 raw probe |
 | v1.0-draft2 | 2026-11-14 | 阶段 2 落地：Spool 改为按批次存储；Reporter 选项改为 `DisableGzip` / `SkipValidation`，移除未生效的 `MaxBatchBytes` |
+| v1.0 | 2026-11-14 | 阶段 3 完成：契约探针、CI、README、`v0.1.0`；D1/D2/D11 已落地 |
 
 ---
 

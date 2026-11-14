@@ -1,0 +1,30 @@
+name: Contract Probe
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 每天 UTC 18:00（北京时间 02:00）跑一次
+    - cron: "0 18 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+          cache: true
+
+      - name: Run contract probe
+        env:
+          SHIELDX_BASE_URL: ${{ secrets.SHIELDX_PROBE_BASE_URL }}
+          SHIELDX_TOKEN: ${{ secrets.SHIELDX_PROBE_TOKEN }}
+          SHIELDX_GATEWAY_ID: ${{ secrets.SHIELDX_PROBE_GATEWAY_ID }}
+          SHIELDX_PROBE_EMPTY_TOKEN: ${{ secrets.SHIELDX_PROBE_EMPTY_TOKEN }}
+          SHIELDX_PROBE_TOKEN_B: ${{ secrets.SHIELDX_PROBE_TOKEN_B }}
+        run: go test -tags=contract_probe -v ./probe
