@@ -15,10 +15,19 @@ Go client for integrating a gateway with **shield-x**：拉策略快照、拉拦
 - **可选 reporter**：非阻塞入队、批量/压缩、413 拆批、429 退避、磁盘 spool 补发。
 - **契约探针**：不依赖 SDK 的裸 HTTP 校验，避免 SDK 与服务端共享同一错误假设。
 
+## 边界：不做什么
+
+| 不做 | 原因 |
+|---|---|
+| 策略求值、模板渲染、拦截执行 | gateway 的职责；SDK 只负责协议与传输 |
+| 快照落盘格式、`fail_open` / `fail_closed` | 网关策略；SDK 只用 `InitialRevision` 接回恢复后的版本 |
+| 控制台管理 API、CLI、配置框架 | 不属于 gateway 接入 SDK |
+| 自动生成事件、脱敏、真实 IP 解析 | 由 gateway 在请求路径完成 |
+
 ## 安装
 
 ```bash
-go get github.com/linyu19872008/shield-x-client-go@v0.1.0
+go get github.com/linyu19872008/shield-x-client-go@v0.1.1
 ```
 
 ## 快速开始
@@ -96,6 +105,19 @@ func main() {
 | [`reporter`](reporter/) | 批量上报、背压、413/429、spool 接口 |
 | [`reporter/spool`](reporter/spool/) | 磁盘缓冲实现 |
 
+## 仓库结构
+
+```text
+agent/              核心客户端：Config / Client / 模型 / 错误 / 校验 / 编码
+poller/             策略轮询：304、原子快照、退避、模板按需拉取
+reporter/           批量上报：背压、413、429、spool 接口
+reporter/spool/     磁盘缓冲实现
+probe/              裸 HTTP 契约探针（build tag contract_probe）
+examples/           最小接入示例
+testdata/contract/  契约夹具
+docs/               API 设计与变更记录
+```
+
 ## 契约保证
 
 | 契约条款 | SDK 行为 |
@@ -153,4 +175,5 @@ CI 会额外校验零第三方依赖（`go list -m all` 只有本模块）。
 ## 文档
 
 - [公开 API 设计 v1.0](docs/client-go-api-v1.md)
+- [CHANGELOG](CHANGELOG.md)
 - 契约源：shield-x 仓库 `docs/gateway-contract-v1.md`（文档编号 `SHIELDX-IC-001`）
