@@ -678,12 +678,11 @@ Transport: faultTransport
 policies_200.json
 policies_empty.json
 templates_200.json
-events_batch.ndjson
-events_batch.json
 error_401.json
 error_413.json
-etag_304.txt
 ```
+
+304 与 429 由 `httptest` handler 直接构造，不需要静态夹具。
 
 | 层 | 用例 |
 |---|---|
@@ -767,6 +766,8 @@ README 必须包含快速开始、兼容矩阵、probe 用法。
 ---
 
 ## 附录 A：最小示例
+
+> 阶段 1 的 `examples/gateway-minimal` 只用核心 `agent.Client` 手动轮询；下面这段 poller/reporter 版本在阶段 2 落地后替换。
 
 ```go
 package main

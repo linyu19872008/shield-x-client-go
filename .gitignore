@@ -1,0 +1,29 @@
+# 构建产物
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# 本地工具与缓存
+.cache/
+.codegraph/
+
+# 跨仓本地开发工作区（不入库）
+go.work
+go.work.sum
+
+# 依赖（使用 go modules，不提交 vendor）
+/vendor/
+
+# 本地配置与密钥
+.env
+.env.local
+*.pem
+
+# 编辑器与系统文件
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.log
