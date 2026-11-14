@@ -28,6 +28,7 @@ use (
 )
 EOF
 
+export GOWORK="$ROOT/go.work"
 export SHIELDX_DB_DSN="root:11111111@tcp(127.0.0.1:3306)/${DB}?parseTime=true&loc=UTC"
 export SHIELDX_SUPER_ADMIN_PASSWORD="Passw0rd!123"
 export SHIELDX_LISTEN_AGENT="127.0.0.1:18080"
@@ -43,6 +44,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "== build shield-x =="
+echo "GOWORK=$(go env GOWORK)"
 (cd "$SHIELDX" && go build -o "$BIN" ./cmd/shield-x)
 
 echo "== migrate =="
