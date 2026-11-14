@@ -83,7 +83,7 @@ func (c *Client) FetchPolicies(ctx context.Context, sinceRevision int64) (Polici
 	if c.capabilitiesHeader != "" {
 		req.Header.Set("X-Shieldx-Capabilities", c.capabilitiesHeader)
 	}
-	if sinceRevision > 0 {
+	if sinceRevision >= 0 {
 		req.Header.Set("If-None-Match", fmt.Sprintf(`"rev-%d"`, sinceRevision))
 	}
 
@@ -128,7 +128,7 @@ func (c *Client) FetchTemplates(ctx context.Context, sinceRevision int64) (Templ
 	}
 	c.setCommonHeaders(req)
 	req.Header.Set("X-Shieldx-Gateway-Id", c.cfg.GatewayID)
-	if sinceRevision > 0 {
+	if sinceRevision >= 0 {
 		req.Header.Set("If-None-Match", fmt.Sprintf(`"rev-%d"`, sinceRevision))
 	}
 

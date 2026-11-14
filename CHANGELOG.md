@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.1 — 2026-11-14
+
+### Fixed
+
+- `FetchPolicies` / `FetchTemplates` 的 `sinceRevision` 语义改为"负数 = 不带条件，
+  `>= 0` 发送 `If-None-Match: "rev-N"`"。revision 0 是合法值，空租户现在也能
+  在第二次轮询拿到 304，而不是每轮重新拉空快照。
+- `poller.InitialRevision` 允许 `-1` 表示"没有本地快照"。
+
 ## v0.1.0 — 2026-11-14
 
 首个可用版本，契约版本 `agent-v1`。

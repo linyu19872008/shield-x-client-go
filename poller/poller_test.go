@@ -42,6 +42,9 @@ func TestPollerRunAndNotModified(t *testing.T) {
 	var calls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) == 1 {
+			if got := r.Header.Get("If-None-Match"); got != `"rev-0"` {
+				t.Errorf("首次请求 If-None-Match = %q，期望 \"rev-0\"", got)
+			}
 			w.Header().Set("ETag", `"rev-39"`)
 			_, _ = w.Write(fixture(t, "policies_200.json"))
 			return
@@ -269,7 +272,7 @@ func TestNewValidation(t *testing.T) {
 	}{
 		{"client 为 nil", nil, Options{}},
 		{"Interval 过小", c, Options{Interval: 100 * time.Millisecond}},
-		{"InitialRevision 为负", c, Options{InitialRevision: -1}},
+		{"InitialRevision 小于 -1", c, Options{InitialRevision: -2}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -277,5 +280,9 @@ func TestNewValidation(t *testing.T) {
 				t.Fatal("期望错误")
 			}
 		})
+	}
+
+	if _, err := New(c, Options{InitialRevision: -1}); err != nil {
+		t.Fatalf("InitialRevision=-1 应合法: %v", err)
 	}
 }

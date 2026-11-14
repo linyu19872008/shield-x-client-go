@@ -26,7 +26,7 @@ const (
 type Options struct {
 	Interval        time.Duration // 默认 5s，最小 1s
 	Timeout         time.Duration // 默认 3s
-	InitialRevision int64         // 从磁盘快照恢复时传入
+	InitialRevision int64         // 从磁盘快照恢复时传入；-1 表示没有本地快照
 
 	OnSnapshot    func(*agent.PolicySnapshot) // 仅 revision 变化时回调
 	OnNotModified func(revision int64)        // 304 时回调（可选）
@@ -82,8 +82,8 @@ func New(c *agent.Client, opts Options) (*Poller, error) {
 	if opts.Timeout < 0 {
 		return nil, errors.New("poller: Timeout 不能为负")
 	}
-	if opts.InitialRevision < 0 {
-		return nil, errors.New("poller: InitialRevision 不能为负")
+	if opts.InitialRevision < -1 {
+		return nil, errors.New("poller: InitialRevision 不能小于 -1")
 	}
 	return &Poller{
 		client:   c,

@@ -174,8 +174,8 @@ type ReportResult struct {
 
 | 场景 | 行为 |
 |---|---|
-| `sinceRevision <= 0` | 不发送 `If-None-Match` |
-| `sinceRevision > 0` | 发送 `If-None-Match: "rev-<n>"` |
+| `sinceRevision < 0` | 不发送 `If-None-Match`（无本地快照） |
+| `sinceRevision >= 0` | 发送 `If-None-Match: "rev-<n>"`（revision 0 也合法） |
 | 200 | 解码快照，返回 `Snapshot` |
 | 304 | 返回 `NotModified=true`，`Revision` 解析自 `ETag`，缺失时回退 `sinceRevision` |
 | 4xx/5xx | 返回 `*APIError` |
@@ -472,7 +472,7 @@ func WithSkipValidation() ReportOption
 type Options struct {
     Interval        time.Duration // 默认 5s，最小 1s
     Timeout         time.Duration // 默认 3s
-    InitialRevision int64         // 从磁盘快照恢复时传入
+    InitialRevision int64         // 从磁盘快照恢复时传入；-1 表示没有本地快照
 
     OnSnapshot    func(*agent.PolicySnapshot) // 仅 revision 变化时回调
     OnNotModified func(revision int64)        // 304 时回调（可选）
@@ -767,6 +767,7 @@ README 必须包含快速开始、兼容矩阵、probe 用法。
 | v1.0-draft | 2026-11-14 | 首版：核心 client、poller、reporter、spool、transport 注入、错误模型、测试矩阵与 raw probe |
 | v1.0-draft2 | 2026-11-14 | 阶段 2 落地：Spool 改为按批次存储；Reporter 选项改为 `DisableGzip` / `SkipValidation`，移除未生效的 `MaxBatchBytes` |
 | v1.0 | 2026-11-14 | 阶段 3 完成：契约探针、CI、README、`v0.1.0`；D1/D2/D11 已落地 |
+| v1.0.1 | 2026-11-14 | `FetchPolicies/FetchTemplates` 改负数表示无条件；revision 0 也发送 `If-None-Match`，空租户可正常 304（`v0.1.1`） |
 
 ---
 

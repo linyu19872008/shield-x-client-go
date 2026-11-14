@@ -102,7 +102,7 @@ func TestFetchPoliciesOK(t *testing.T) {
 		_, _ = w.Write(fixture(t, "policies_200.json"))
 	}))
 
-	res, err := c.FetchPolicies(context.Background(), 0)
+	res, err := c.FetchPolicies(context.Background(), -1)
 	if err != nil {
 		t.Fatalf("FetchPolicies 失败: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestFetchPoliciesOK(t *testing.T) {
 		t.Fatalf("Agent-Version = %q", v)
 	}
 	if v := got.header.Get("If-None-Match"); v != "" {
-		t.Fatalf("since=0 不应带 If-None-Match，实际 %q", v)
+		t.Fatalf("since=-1 不应带 If-None-Match，实际 %q", v)
 	}
 	if v := got.header.Get("User-Agent"); !strings.HasPrefix(v, "shield-x-client-go/") {
 		t.Fatalf("User-Agent = %q", v)
@@ -145,6 +145,26 @@ func TestFetchPoliciesOK(t *testing.T) {
 	}
 	if len(caps.Actions) != 2 || caps.MaxRules != 5000 {
 		t.Fatalf("能力头内容不符: %+v", caps)
+	}
+}
+
+func TestFetchPoliciesRevisionZeroSendsETag(t *testing.T) {
+	ch := make(chan string, 1)
+	c := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ch <- r.Header.Get("If-None-Match")
+		w.Header().Set("ETag", `"rev-0"`)
+		w.WriteHeader(http.StatusNotModified)
+	}))
+
+	res, err := c.FetchPolicies(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("revision 0 的 304 不应返回错误: %v", err)
+	}
+	if !res.NotModified || res.Revision != 0 {
+		t.Fatalf("结果不符: %+v", res)
+	}
+	if got := <-ch; got != `"rev-0"` {
+		t.Fatalf("If-None-Match = %q，期望 \"rev-0\"", got)
 	}
 }
 
