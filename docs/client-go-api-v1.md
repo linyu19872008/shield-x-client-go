@@ -523,21 +523,20 @@ type Stats struct {
 ```go
 type Options struct {
     BatchSize     int           // 默认 300，上限 1000
-    MaxBatchBytes int           // 默认 1 MiB（压缩前）
     FlushInterval time.Duration // 默认 2s
     QueueSize     int           // 默认 10000 条
 
-    Format     agent.Format   // 默认 NDJSON
-    Gzip       bool           // 默认 true
-    Timeout    time.Duration  // 默认 10s
-    MaxBackoff time.Duration  // 默认 60s
+    Format      agent.Format  // 默认 NDJSON
+    DisableGzip bool          // 默认 false（开启压缩）
+    Timeout     time.Duration // 默认 10s
+    MaxBackoff  time.Duration // 默认 60s
 
     Spool Spool // nil = 纯内存
 
     // 必填：批次里的 config_revision / policy_count。
     State func() (revision int64, policyCount int)
 
-    Validate        bool // 默认 true
+    SkipValidation  bool // 默认 false（校验每个事件）
     OnError         func(error)
     OnDrop          func(n int, reason string)
     ShutdownTimeout time.Duration // 默认 5s
@@ -588,17 +587,10 @@ type Stats struct {
 ```go
 // 定义在 reporter 包；实现在 reporter/spool。
 type Spool interface {
-    Save(ctx context.Context, payload []byte, meta Meta) error
-    Replay(ctx context.Context, fn func([]byte, Meta) error) error
+    Save(ctx context.Context, batch agent.EventBatch) error
+    Replay(ctx context.Context, fn func(agent.EventBatch) error) error
     Stats() SpoolStats
     Trim(ctx context.Context) error
-}
-
-type Meta struct {
-    Format     agent.Format
-    Gzip       bool
-    Events     int
-    EnqueuedAt time.Time
 }
 
 type SpoolStats struct {
@@ -619,11 +611,12 @@ func NewDisk(dir string, opts ...Option) (*Disk, error)
 
 文件格式：
 
-- 文件名：`v1-<unixnano>-<seq>-<events>-<format>-<gz|plain>.bin`
-- 内容：已经编码好的请求体原文，补发时原样发送
-- 文件名即元信息，不需要 sidecar
+- 文件名：`v1-<unixnano>-<seq>-<events>.json.gz`
+- 内容：gzip 压缩的 JSON `{"v":1,"saved_at":...,"batch":{...}}`
+- 批次里保留 `config_revision` / `policy_count`，补发时重新编码
 - 写入用临时文件 + rename 保证原子性
-- 超限按最旧丢弃并计数
+- 超限按最旧丢弃，至少保留最新一个文件
+- 损坏文件在补发时跳过并删除，避免永久阻塞
 
 ---
 
@@ -762,12 +755,13 @@ README 必须包含快速开始、兼容矩阵、probe 用法。
 | 版本 | 日期 | 变更 |
 |---|---|---|
 | v1.0-draft | 2026-11-14 | 首版：核心 client、poller、reporter、spool、transport 注入、错误模型、测试矩阵与 raw probe |
+| v1.0-draft2 | 2026-11-14 | 阶段 2 落地：Spool 改为按批次存储；Reporter 选项改为 `DisableGzip` / `SkipValidation`，移除未生效的 `MaxBatchBytes` |
 
 ---
 
 ## 附录 A：最小示例
 
-> 阶段 1 的 `examples/gateway-minimal` 只用核心 `agent.Client` 手动轮询；下面这段 poller/reporter 版本在阶段 2 落地后替换。
+> 阶段 2 起 `examples/gateway-minimal` 已使用 poller + reporter，与下面示例一致。
 
 ```go
 package main

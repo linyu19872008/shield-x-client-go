@@ -1,6 +1,5 @@
-// gateway-minimal 演示阶段 1 的最小接入：只用核心 Client 手动轮询策略。
-//
-// 阶段 2 会引入 poller / reporter，把这里的轮询与上报换成生产级实现。
+// gateway-minimal 演示 gateway 侧的最小接入：
+// poller 拉策略，reporter 上报事件，业务侧只需 Enqueue。
 package main
 
 import (
@@ -11,6 +10,8 @@ import (
 	"time"
 
 	"github.com/linyu19872008/shield-x-client-go/agent"
+	"github.com/linyu19872008/shield-x-client-go/poller"
+	"github.com/linyu19872008/shield-x-client-go/reporter"
 )
 
 func main() {
@@ -32,34 +33,41 @@ func main() {
 	}
 	defer c.Close()
 
+	p, err := poller.New(c, poller.Options{
+		Interval: 5 * time.Second,
+		OnSnapshot: func(s *agent.PolicySnapshot) {
+			log.Printf("策略已更新：revision=%d count=%d", s.Revision, len(s.Policies))
+		},
+		OnError: func(err error) {
+			log.Printf("拉策略失败（继续用旧快照）: %v", err)
+		},
+	})
+	if err != nil {
+		log.Fatalf("创建 poller 失败: %v", err)
+	}
+
+	r, err := reporter.New(c, reporter.Options{
+		State: func() (int64, int) {
+			s := p.Snapshot()
+			if s == nil {
+				return 0, 0
+			}
+			return s.Revision, len(s.Policies)
+		},
+		OnError: func(err error) {
+			log.Printf("上报失败（本地缓冲）: %v", err)
+		},
+	})
+	if err != nil {
+		log.Fatalf("创建 reporter 失败: %v", err)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	var since int64
-	fetch := func() {
-		res, err := c.FetchPolicies(ctx, since)
-		if err != nil {
-			log.Printf("拉策略失败: %v", err)
-			return
-		}
-		if res.NotModified {
-			log.Printf("策略未变更（revision=%d）", res.Revision)
-			return
-		}
-		since = res.Revision
-		log.Printf("策略已更新：revision=%d count=%d filtered_out=%d",
-			res.Revision, len(res.Snapshot.Policies), res.Snapshot.FilteredOut)
-	}
+	go func() { _ = p.Run(ctx) }()
+	go func() { _ = r.Run(ctx) }()
 
-	fetch()
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			fetch()
-		}
-	}
+	// 业务侧：命中策略后构造 agent.Event 并 r.Enqueue(ev)。
+	<-ctx.Done()
 }

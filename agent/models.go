@@ -207,10 +207,10 @@ type Event struct {
 //
 // agent_version / gateway_id 由 Client 从 Config 自动填充，调用方不需要关心。
 type EventBatch struct {
-	ConfigRevision int64
-	PolicyCount    int
-	ClientStats    *ClientStats
-	Events         []Event
+	ConfigRevision int64        `json:"config_revision"`
+	PolicyCount    int          `json:"policy_count"`
+	ClientStats    *ClientStats `json:"client_stats,omitempty"`
+	Events         []Event      `json:"events"`
 }
 
 // ClientStats 让服务端感知上报侧是否在丢数据。
