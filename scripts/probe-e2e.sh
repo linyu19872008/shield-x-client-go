@@ -19,16 +19,6 @@ if [ ! -d "$SHIELDX" ]; then
   exit 1
 fi
 
-cat > "$ROOT/go.work" <<EOF
-go 1.26.4
-
-use (
-	.
-	./shield-x
-)
-EOF
-
-export GOWORK="$ROOT/go.work"
 export SHIELDX_DB_DSN="root:11111111@tcp(127.0.0.1:3306)/${DB}?parseTime=true&loc=UTC"
 export SHIELDX_SUPER_ADMIN_PASSWORD="Passw0rd!123"
 export SHIELDX_LISTEN_AGENT="127.0.0.1:18080"
@@ -39,12 +29,16 @@ cleanup() {
     kill "$PID" 2>/dev/null || true
     wait "$PID" 2>/dev/null || true
   fi
-  rm -f "$ROOT/go.work" "$ROOT/go.work.sum"
+  if [ -f "$SHIELDX/go.mod.ci-bak" ]; then
+    mv "$SHIELDX/go.mod.ci-bak" "$SHIELDX/go.mod"
+  fi
 }
 trap cleanup EXIT
 
 echo "== build shield-x =="
-echo "GOWORK=$(go env GOWORK)"
+# CI 已 checkout client-go 到同级目录：临时 replace，避免拉私有模块。
+cp "$SHIELDX/go.mod" "$SHIELDX/go.mod.ci-bak"
+printf '\nreplace github.com/linyu19872008/shield-x-client-go => ..\n' >> "$SHIELDX/go.mod"
 (cd "$SHIELDX" && go build -o "$BIN" ./cmd/shield-x)
 
 echo "== migrate =="
