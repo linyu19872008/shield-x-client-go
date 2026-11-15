@@ -38,7 +38,7 @@ jobs:
           path: shield-x
           ssh-key: ${{ secrets.CI_READ_KEY }}
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: shield-x/go.mod
           cache: false
