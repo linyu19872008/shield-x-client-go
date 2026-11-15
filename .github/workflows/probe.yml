@@ -29,16 +29,16 @@ jobs:
 
     steps:
       - name: checkout client-go
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: checkout shield-x
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: linyu19872008/shield-x
           path: shield-x
           ssh-key: ${{ secrets.CI_READ_KEY }}
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: shield-x/go.mod
           cache: false
