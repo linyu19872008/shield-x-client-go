@@ -1,36 +1,57 @@
 # shield-x-client-go
 
 [![CI](https://github.com/linyu19872008/shield-x-client-go/actions/workflows/ci.yml/badge.svg)](https://github.com/linyu19872008/shield-x-client-go/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/linyu19872008/shield-x-client-go)](https://github.com/linyu19872008/shield-x-client-go/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
+[![Contract](https://img.shields.io/badge/contract-agent--v1-blue.svg)](CONTRACT_VERSION)
 
-Go client for integrating a gateway with **shield-x**：拉策略快照、拉拦截模板、批量上报请求事件。
+**English** | [简体中文](README.zh-CN.md)
 
-契约版本：**`agent-v1`**（见 [`CONTRACT_VERSION`](CONTRACT_VERSION)）。API 设计见 [docs/client-go-api-v1.md](docs/client-go-api-v1.md)。
+Go client for integrating a gateway with **shield-x**: pull policy snapshots, pull block templates, and report request events in batches.
 
-## 特性
+> **Status: private preview.** The module is not on the public Go module proxy. Request repository access first; see [Install](#install). The API is `0.1.x` and may change before `1.0`.
 
-- **核心零依赖**：只使用标准库，Go 1.22+。
-- **304 不是错误**：返回值显式区分 `NotModified` 与快照。
-- **契约语义集中**：整体替换、空策略清空、失败保留旧快照、不排序、批次上限。
-- **可选 poller**：轮询、ETag、原子快照、指数退避、模板按需拉取。
-- **可选 reporter**：非阻塞入队、批量/压缩、413 拆批、429 退避、磁盘 spool 补发。
-- **契约探针**：不依赖 SDK 的裸 HTTP 校验，避免 SDK 与服务端共享同一错误假设。
+- Contract version: `agent-v1` ([`CONTRACT_VERSION`](CONTRACT_VERSION))
+- Reference API guide: [docs/client-go-api-v1.md](docs/client-go-api-v1.md)
+- License: [MIT](LICENSE)
 
-## 边界：不做什么
+## Why this SDK
 
-| 不做 | 原因 |
+- **Zero third-party dependencies**: only the Go standard library.
+- **304 is not an error**: results distinguish `NotModified` from a snapshot.
+- **Contract semantics in one place**: whole-snapshot replacement, empty list clears, failures keep the old snapshot, no sorting, batch limits.
+- **Optional poller**: scheduling, ETag, atomic snapshot replacement, exponential backoff, on-demand template refresh.
+- **Optional reporter**: non-blocking queue, batching/compression, 413 split, 429 backoff, disk spool replay.
+- **Independent contract probe**: raw HTTP checks that do not import the SDK, so an SDK bug cannot mask a server bug.
+
+## Boundaries
+
+| This SDK does | This SDK does not do |
 |---|---|
-| 策略求值、模板渲染、拦截执行 | gateway 的职责；SDK 只负责协议与传输 |
-| 快照落盘格式、`fail_open` / `fail_closed` | 网关策略；SDK 只用 `InitialRevision` 接回恢复后的版本 |
-| 控制台管理 API、CLI、配置框架 | 不属于 gateway 接入 SDK |
-| 自动生成事件、脱敏、真实 IP 解析 | 由 gateway 在请求路径完成 |
+| Pull policies/templates and report events | Evaluate policies, render templates, or enforce actions |
+| 304/ETag, empty snapshot, retries, batching | Persist snapshots or decide `fail_open` / `fail_closed` |
+| Event validation and capability declaration | Resolve client IPs, redact data, or generate events |
+| Optional poller/reporter/spool | Console API, CLI, or configuration framework |
 
-## 安装
+## Requirements
+
+- Go 1.22+
+- A shield-x deployment and a tenant token
+- Network access to the shield-x base URL (which includes the `/shieldx` prefix)
+
+## Install
+
+The repository is private during preview:
 
 ```bash
+export GOPRIVATE=github.com/linyu19872008/*
 go get github.com/linyu19872008/shield-x-client-go@v0.1.1
 ```
 
-## 快速开始
+For local development, clone the repository and use a `replace` directive. The module has no third-party dependencies, so `go mod download` only needs the standard library.
+
+## Quick start
 
 ```go
 package main
@@ -49,7 +70,7 @@ import (
 
 func main() {
 	c, err := agent.New(agent.Config{
-		BaseURL:      "http://127.0.0.1:8080/shieldx",
+		BaseURL:      "http://shield-x.internal:8080/shieldx",
 		Token:        "sx_xxx",
 		GatewayID:    "gw-demo-01",
 		AgentVersion: "gateway/1.4.2",
@@ -64,76 +85,61 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer c.Close()
-
-	p, _ := poller.New(c, poller.Options{
-		Interval: 5 * time.Second,
-		OnSnapshot: func(s *agent.PolicySnapshot) {
-			log.Printf("revision=%d policies=%d", s.Revision, len(s.Policies))
-		},
-	})
-
-	r, _ := reporter.New(c, reporter.Options{
-		State: func() (int64, int) {
-			s := p.Snapshot()
-			if s == nil {
-				return 0, 0
-			}
-			return s.Revision, len(s.Policies)
-		},
-	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	go func() { _ = p.Run(ctx) }()
-	go func() { _ = r.Run(ctx) }()
+	p := poller.New(c, poller.Options{
+		Interval: 5 * time.Second,
+		OnError:  func(err error) { log.Printf("poll failed: %v", err) },
+	})
 
-	// 业务侧：命中策略后构造 agent.Event 并 r.Enqueue(ev)。
-	<-ctx.Done()
+	r := reporter.New(c, reporter.Options{
+		BatchSize: 300,
+		State: func() (int64, int) {
+			if snap := p.Snapshot(); snap != nil {
+				return snap.Revision, len(snap.Policies)
+			}
+			return 0, 0
+		},
+		OnError: func(err error) { log.Printf("report failed: %v", err) },
+	})
+
+	go func() { _ = p.Run(ctx) }()
+	if err := r.Run(ctx); err != nil && err != context.Canceled {
+		log.Fatal(err)
+	}
 }
 ```
 
-完整示例见 [`examples/gateway-minimal`](examples/gateway-minimal/main.go)。
+See [`examples/gateway-minimal`](examples/gateway-minimal/main.go) for a complete runnable example.
 
-## 包
+## Packages
 
-| 包 | 作用 |
+| Package | Purpose |
 |---|---|
-| [`agent`](agent/) | 核心客户端、模型、错误、校验、编码 |
-| [`poller`](poller/) | 策略轮询、ETag、原子快照、退避 |
-| [`reporter`](reporter/) | 批量上报、背压、413/429、spool 接口 |
-| [`reporter/spool`](reporter/spool/) | 磁盘缓冲实现 |
+| [`agent`](agent/) | Core client, models, errors, validation, encoding |
+| [`poller`](poller/) | Polling, ETag, atomic snapshots, backoff |
+| [`reporter`](reporter/) | Batching, backpressure, 413/429, spool interface |
+| [`reporter/spool`](reporter/spool/) | Disk-backed spool |
+| [`probe`](probe/) | Raw HTTP contract probe (`contract_probe` build tag) |
 
-## 仓库结构
+## Contract guarantees
 
-```text
-agent/              核心客户端：Config / Client / 模型 / 错误 / 校验 / 编码
-poller/             策略轮询：304、原子快照、退避、模板按需拉取
-reporter/           批量上报：背压、413、429、spool 接口
-reporter/spool/     磁盘缓冲实现
-probe/              裸 HTTP 契约探针（build tag contract_probe）
-examples/           最小接入示例
-testdata/contract/  契约夹具
-docs/               API 设计与变更记录
-```
-
-## 契约保证
-
-| 契约条款 | SDK 行为 |
+| Contract rule | SDK behavior |
 |---|---|
-| 304 Not Modified | 不是错误；`Snapshot=nil`，`Revision` 从 ETag 解析 |
-| 空策略 `policies: []` | 合法；poller 用空快照整体替换 |
-| 失败保留旧快照 | poller 不覆盖；reporter 落 spool 或回队列 |
-| 不排序 | 模型保持服务端顺序 |
-| 批次 ≤1000 条 / 1 MiB | 本地预检，超限返回 `ErrBatchTooLarge` |
-| `matched_policy_id` 未命中 | 必须为 `null`；事件校验强制三态一致 |
-| 429 | 优先按 `Retry-After` 退避；缺失则指数退避 |
-| 413 | reporter 自动拆半重发 |
+| 304 Not Modified | Not an error; `Snapshot=nil`, revision parsed from ETag |
+| Empty `policies: []` | Legal; poller replaces with an empty snapshot |
+| Failure keeps old snapshot | Poller does not overwrite; reporter spools or requeues |
+| No sorting | Server order is preserved |
+| Batch ≤1000 events / 1 MiB | Local pre-check with `ErrBatchTooLarge` |
+| `matched_policy_id` on miss | Must be `null`; event validation enforces the tri-state rule |
+| 429 | Prefer `Retry-After`; otherwise exponential backoff |
+| 413 | Reporter splits the batch in half |
 
-## 契约探针
+## Contract probe
 
-探针只使用标准库，**不 import `agent`**，用于在真实 shield-x 实例上校验线格式：
+The probe uses only the standard library and **does not import `agent`**:
 
 ```bash
 SHIELDX_BASE_URL=http://127.0.0.1:8080/shieldx \
@@ -141,25 +147,25 @@ SHIELDX_TOKEN=sx_xxx \
 go test -tags=contract_probe -v ./probe
 ```
 
-| 环境变量 | 必填 | 用途 |
+| Variable | Required | Purpose |
 |---|---|---|
-| `SHIELDX_BASE_URL` | 是 | 含 `/shieldx` 前缀的基地址 |
-| `SHIELDX_TOKEN` | 是 | 租户 Token |
-| `SHIELDX_GATEWAY_ID` | 否 | 默认 `gw-probe-01` |
-| `SHIELDX_PROBE_EMPTY_TOKEN` | 否 | 空策略租户用例（P4） |
-| `SHIELDX_PROBE_TOKEN_B` | 否 | 跨租户隔离用例（P9） |
+| `SHIELDX_BASE_URL` | yes | Base URL including `/shieldx` |
+| `SHIELDX_TOKEN` | yes | Tenant token |
+| `SHIELDX_GATEWAY_ID` | no | Defaults to `gw-probe-01` |
+| `SHIELDX_PROBE_EMPTY_TOKEN` | no | Empty-tenant case (P4) |
+| `SHIELDX_PROBE_TOKEN_B` | no | Cross-tenant isolation case (P9) |
 
-未设置必填变量时探针整体 `Skip`；P8（429 + `Retry-After`）默认 `Skip`，由 shield-x 单测覆盖。
+Missing required variables skip the probe. P8 (429 + `Retry-After`) is skipped unless the server can trigger rate limiting; P9 requires both tenants to have policies.
 
-## 兼容性
+## Compatibility
 
-| client-go | 契约 | shield-x |
+| client-go | Contract | shield-x |
 |---|---|---|
-| v0.1.x | `agent-v1` | v0.9.x |
+| `v0.1.x` | `agent-v1` | `v0.9.x` |
 
-当前为 `v0.1`，1.0 之前 minor 版本可能包含破坏性调整；升级前请查看 CHANGELOG。
+`0.1.x` is an early line; minor versions may include breaking changes. Check the [CHANGELOG](CHANGELOG.md) before upgrading.
 
-## 开发
+## Development
 
 ```bash
 go build ./...
@@ -167,14 +173,24 @@ go vet ./...
 go test ./...
 go test -race ./...
 gofmt -l .
-go vet -tags=contract_probe ./...   # 编译探针
+go vet -tags=contract_probe ./...
 ```
 
-CI 会额外校验零第三方依赖（`go list -m all` 只有本模块），并检查 `.codegraph/`、`.cache/`
-没有被提交。`.codegraph/` 是本地代码索引，已在 `.gitignore` 中忽略。
+CI additionally verifies that only the module itself is listed by `go list -m all`, and that `.codegraph/` / `.cache/` are not tracked.
 
-## 文档
+## Documentation
 
-- [公开 API 设计 v1.0](docs/client-go-api-v1.md)
-- [CHANGELOG](CHANGELOG.md)
-- 契约源：shield-x 仓库 `docs/gateway-contract-v1.md`（文档编号 `SHIELDX-IC-001`）
+- [API guide](docs/client-go-api-v1.md)
+- [Documentation index](docs/README.md)
+- [Changelog](CHANGELOG.md)
+- Contract source: shield-x repository `docs/gateway-contract-v1.md` (document `SHIELDX-IC-001`)
+
+## Contributing and security
+
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+
+## License
+
+[MIT](LICENSE) © 2026 linyu19872008
