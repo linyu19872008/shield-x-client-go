@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sort"
 	"sync"
 	"time"
 
@@ -222,6 +223,20 @@ func (p *Poller) pollLocked(ctx context.Context) pollOutcome {
 		return out
 	}
 
+	if res.Snapshot != nil && res.Snapshot.Snapshot == "delta" {
+		// delta 只有在本地基线与服务端 base_revision 一致、且服务端未要求
+		// 全量重同步时才可合并；否则保留旧快照，回到 -1 强制下一次全量。
+		if p.snapshot == nil || res.Snapshot.ResyncRequired || res.Snapshot.BaseRevision != since {
+			p.revision = -1
+			err := errors.New("poller: delta base/resync mismatch，将强制全量")
+			p.stats.Failures++
+			p.stats.LastError = err
+			wait := p.nextBackoffLocked(err)
+			p.stats.CurrentBackoff = wait
+			return pollOutcome{wait: wait, err: err}
+		}
+		res.Snapshot = p.mergeDeltaLocked(res.Snapshot)
+	}
 	p.stats.Success++
 	p.revision = res.Revision
 	p.stats.LastRevision = res.Revision
@@ -229,6 +244,44 @@ func (p *Poller) pollLocked(ctx context.Context) pollOutcome {
 	out.snapshot = res.Snapshot
 	out.fetchTemplates = p.opts.FetchTemplates
 	return out
+}
+
+// mergeDeltaLocked 把 delta 合并成完整本地快照。调用方必须持有 p.mu。
+func (p *Poller) mergeDeltaLocked(delta *agent.PolicySnapshot) *agent.PolicySnapshot {
+	base := p.snapshot
+	out := *base
+	byID := make(map[string]agent.Policy, len(base.Policies))
+	for _, pol := range base.Policies {
+		byID[pol.ID] = pol
+	}
+	for _, pol := range delta.Upserts {
+		byID[pol.ID] = pol
+	}
+	for _, id := range delta.Deletes {
+		delete(byID, id)
+	}
+	out.Policies = make([]agent.Policy, 0, len(byID))
+	for _, pol := range byID {
+		out.Policies = append(out.Policies, pol)
+	}
+	// 服务端全量快照按 priority DESC, id ASC 排序（契约 §4.5）；
+	// delta 的 upserts 不能直接追加，必须按同一顺序重排，保证 first-match 语义稳定。
+	sort.SliceStable(out.Policies, func(i, j int) bool {
+		if out.Policies[i].Priority != out.Policies[j].Priority {
+			return out.Policies[i].Priority > out.Policies[j].Priority
+		}
+		return out.Policies[i].ID < out.Policies[j].ID
+	})
+	out.Revision = delta.Revision
+	out.GeneratedAt = delta.GeneratedAt
+	out.PolicyCount = len(out.Policies)
+	out.FilteredOut = delta.FilteredOut
+	out.Snapshot = "full"
+	out.BaseRevision = 0
+	out.Upserts = nil
+	out.Deletes = nil
+	out.ResyncRequired = false
+	return &out
 }
 
 type templateOutcome struct {
