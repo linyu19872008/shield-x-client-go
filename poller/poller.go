@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sort"
 	"sync"
 	"time"
 
@@ -223,12 +224,62 @@ func (p *Poller) pollLocked(ctx context.Context) pollOutcome {
 	}
 
 	p.stats.Success++
+	if res.Snapshot != nil && res.Snapshot.Snapshot == "delta" {
+		if p.snapshot == nil {
+			// 没有本地基线不能合并；回到 -1 强制下一次全量。
+			p.revision = -1
+			err := errors.New("poller: 收到 delta 但没有本地基线，将强制全量")
+			p.stats.Failures++
+			p.stats.LastError = err
+			wait := p.nextBackoffLocked(err)
+			p.stats.CurrentBackoff = wait
+			return pollOutcome{wait: wait, err: err}
+		}
+		res.Snapshot = p.mergeDeltaLocked(res.Snapshot)
+	}
 	p.revision = res.Revision
 	p.stats.LastRevision = res.Revision
 	p.snapshot = res.Snapshot
 	out.snapshot = res.Snapshot
 	out.fetchTemplates = p.opts.FetchTemplates
 	return out
+}
+
+// mergeDeltaLocked 把 delta 合并成完整本地快照。调用方必须持有 p.mu。
+func (p *Poller) mergeDeltaLocked(delta *agent.PolicySnapshot) *agent.PolicySnapshot {
+	base := p.snapshot
+	out := *base
+	byID := make(map[string]agent.Policy, len(base.Policies))
+	for _, pol := range base.Policies {
+		byID[pol.ID] = pol
+	}
+	for _, pol := range delta.Upserts {
+		byID[pol.ID] = pol
+	}
+	for _, id := range delta.Deletes {
+		delete(byID, id)
+	}
+	out.Policies = make([]agent.Policy, 0, len(byID))
+	for _, pol := range byID {
+		out.Policies = append(out.Policies, pol)
+	}
+	// 服务端全量按 priority 降序；delta 的 upserts 按 ID 排序，合并后必须重排。
+	sort.SliceStable(out.Policies, func(i, j int) bool {
+		if out.Policies[i].Priority != out.Policies[j].Priority {
+			return out.Policies[i].Priority > out.Policies[j].Priority
+		}
+		return out.Policies[i].ID < out.Policies[j].ID
+	})
+	out.Revision = delta.Revision
+	out.GeneratedAt = delta.GeneratedAt
+	out.PolicyCount = len(out.Policies)
+	out.FilteredOut = delta.FilteredOut
+	out.Snapshot = "full"
+	out.BaseRevision = 0
+	out.Upserts = nil
+	out.Deletes = nil
+	out.ResyncRequired = false
+	return &out
 }
 
 type templateOutcome struct {

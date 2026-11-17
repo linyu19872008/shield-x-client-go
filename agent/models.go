@@ -18,6 +18,13 @@ type PolicySnapshot struct {
 
 	// Policies 保持服务端顺序。SDK 永远不排序——契约 §4.5 第 5 条。
 	Policies []Policy `json:"policies"`
+
+	// 契约 v1.1：增量快照（仅在能力声明 delta_snapshot 时出现）。
+	Snapshot       string   `json:"snapshot,omitempty"`
+	BaseRevision   int64    `json:"base_revision,omitempty"`
+	Upserts        []Policy `json:"upserts,omitempty"`
+	Deletes        []string `json:"deletes,omitempty"`
+	ResyncRequired bool     `json:"resync_required,omitempty"`
 }
 
 // Policy 是一条策略。

@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"crypto/ed25519"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -45,6 +47,10 @@ type Config struct {
 
 	// UserAgent 默认 shield-x-client-go/<version>。
 	UserAgent string
+
+	// SigningKey 是可选的 Ed25519 私钥 seed（64 位 hex）。
+	// 由 shield-x 的 /gateways/v1/register 一次性下发；设置后事件上报会自动签名。
+	SigningKey string
 }
 
 // Validate 校验配置。
@@ -77,6 +83,12 @@ func (c Config) Validate() error {
 	if c.Capabilities != nil {
 		if err := c.Capabilities.Validate(); err != nil {
 			return err
+		}
+	}
+	if c.SigningKey != "" {
+		b, err := hex.DecodeString(c.SigningKey)
+		if err != nil || len(b) != ed25519.SeedSize {
+			return fmt.Errorf("%w: SigningKey 必须是 %d 字节 Ed25519 seed 的 hex", ErrInvalidConfig, ed25519.SeedSize)
 		}
 	}
 	return nil

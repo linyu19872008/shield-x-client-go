@@ -3,6 +3,9 @@ package agent
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +24,8 @@ type Client struct {
 	httpClient         *http.Client
 	ownsTransport      bool
 	capabilitiesHeader string
+	capsHash           string
+	signingKey         ed25519.PrivateKey
 }
 
 // New 创建客户端并校验配置。
@@ -53,6 +58,12 @@ func New(cfg Config) (*Client, error) {
 			return nil, fmt.Errorf("%w: capabilities 编码失败: %v", ErrInvalidConfig, err)
 		}
 		c.capabilitiesHeader = header
+		sum := sha256.Sum256([]byte(header))
+		c.capsHash = hex.EncodeToString(sum[:])
+	}
+	if cfg.SigningKey != "" {
+		seed, _ := hex.DecodeString(cfg.SigningKey)
+		c.signingKey = ed25519.NewKeyFromSeed(seed)
 	}
 	return c, nil
 }
@@ -85,6 +96,12 @@ func (c *Client) FetchPolicies(ctx context.Context, sinceRevision int64) (Polici
 	}
 	if sinceRevision >= 0 {
 		req.Header.Set("If-None-Match", fmt.Sprintf(`"rev-%d"`, sinceRevision))
+		req.Header.Set("X-Shieldx-Applied-Revision", strconv.FormatInt(sinceRevision, 10))
+	}
+	if c.cfg.Capabilities != nil && c.cfg.Capabilities.DeltaSnapshot && sinceRevision > 0 {
+		q := req.URL.Query()
+		q.Set("since_revision", strconv.FormatInt(sinceRevision, 10))
+		req.URL.RawQuery = q.Encode()
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -130,6 +147,12 @@ func (c *Client) FetchTemplates(ctx context.Context, sinceRevision int64) (Templ
 	req.Header.Set("X-Shieldx-Gateway-Id", c.cfg.GatewayID)
 	if sinceRevision >= 0 {
 		req.Header.Set("If-None-Match", fmt.Sprintf(`"rev-%d"`, sinceRevision))
+		req.Header.Set("X-Shieldx-Applied-Revision", strconv.FormatInt(sinceRevision, 10))
+	}
+	if c.cfg.Capabilities != nil && c.cfg.Capabilities.DeltaSnapshot && sinceRevision > 0 {
+		q := req.URL.Query()
+		q.Set("since_revision", strconv.FormatInt(sinceRevision, 10))
+		req.URL.RawQuery = q.Encode()
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -196,6 +219,14 @@ func (c *Client) ReportEvents(ctx context.Context, batch EventBatch, opts ...Rep
 		return ReportResult{}, fmt.Errorf("构造上报请求失败: %w", err)
 	}
 	c.setCommonHeaders(req)
+	req.Header.Set("X-Shieldx-Gateway-Id", c.cfg.GatewayID)
+	if c.signingKey != nil {
+		ts := time.Now().Unix()
+		sum := sha256.Sum256(body)
+		msg := fmt.Sprintf("%d\n%s\n%s\n%s", ts, req.Method, req.URL.RequestURI(), hex.EncodeToString(sum[:]))
+		sig := ed25519.Sign(c.signingKey, []byte(msg))
+		req.Header.Set("X-Shieldx-Signature", fmt.Sprintf("t=%d,v1=%s", ts, hex.EncodeToString(sig)))
+	}
 	req.Header.Set("Content-Type", contentType)
 	if contentEncoding != "" {
 		req.Header.Set("Content-Encoding", contentEncoding)
@@ -238,6 +269,9 @@ func (c *Client) setCommonHeaders(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
 	req.Header.Set("User-Agent", c.cfg.UserAgent)
 	req.Header.Set("X-Shieldx-Agent-Version", c.cfg.AgentVersion)
+	if c.capsHash != "" {
+		req.Header.Set("X-Shieldx-Caps-Hash", c.capsHash)
+	}
 }
 
 func revisionFromETag(etag string) int64 {

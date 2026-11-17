@@ -15,6 +15,10 @@ type Capabilities struct {
 	TemplateSpecVersion int          `json:"template_spec_version"`
 	MaxRules            int          `json:"max_rules"`
 	SupportsRateLimit   bool         `json:"supports_rate_limit"`
+	// DeltaSnapshot 表示能处理增量快照（upserts/deletes）。
+	DeltaSnapshot bool `json:"delta_snapshot,omitempty"`
+	// ApplyAck 表示支持 /gateways/v1/apply-status 回执。
+	ApplyAck bool `json:"apply_ack,omitempty"`
 }
 
 // Validate 校验能力声明。
