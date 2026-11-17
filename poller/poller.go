@@ -264,7 +264,8 @@ func (p *Poller) mergeDeltaLocked(delta *agent.PolicySnapshot) *agent.PolicySnap
 	for _, pol := range byID {
 		out.Policies = append(out.Policies, pol)
 	}
-	// 服务端全量按 priority 降序；delta 的 upserts 按 ID 排序，合并后必须重排。
+	// 服务端全量快照按 priority DESC, id ASC 排序（契约 §4.5）；
+	// delta 的 upserts 不能直接追加，必须按同一顺序重排，保证 first-match 语义稳定。
 	sort.SliceStable(out.Policies, func(i, j int) bool {
 		if out.Policies[i].Priority != out.Policies[j].Priority {
 			return out.Policies[i].Priority > out.Policies[j].Priority
