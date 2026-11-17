@@ -149,12 +149,6 @@ func (c *Client) FetchTemplates(ctx context.Context, sinceRevision int64) (Templ
 		req.Header.Set("If-None-Match", fmt.Sprintf(`"rev-%d"`, sinceRevision))
 		req.Header.Set("X-Shieldx-Applied-Revision", strconv.FormatInt(sinceRevision, 10))
 	}
-	if c.cfg.Capabilities != nil && c.cfg.Capabilities.DeltaSnapshot && sinceRevision > 0 {
-		q := req.URL.Query()
-		q.Set("since_revision", strconv.FormatInt(sinceRevision, 10))
-		req.URL.RawQuery = q.Encode()
-	}
-
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return TemplatesResult{}, err

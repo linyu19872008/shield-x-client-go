@@ -223,12 +223,12 @@ func (p *Poller) pollLocked(ctx context.Context) pollOutcome {
 		return out
 	}
 
-	p.stats.Success++
 	if res.Snapshot != nil && res.Snapshot.Snapshot == "delta" {
-		if p.snapshot == nil {
-			// 没有本地基线不能合并；回到 -1 强制下一次全量。
+		// delta 只有在本地基线与服务端 base_revision 一致、且服务端未要求
+		// 全量重同步时才可合并；否则保留旧快照，回到 -1 强制下一次全量。
+		if p.snapshot == nil || res.Snapshot.ResyncRequired || res.Snapshot.BaseRevision != since {
 			p.revision = -1
-			err := errors.New("poller: 收到 delta 但没有本地基线，将强制全量")
+			err := errors.New("poller: delta base/resync mismatch，将强制全量")
 			p.stats.Failures++
 			p.stats.LastError = err
 			wait := p.nextBackoffLocked(err)
@@ -237,6 +237,7 @@ func (p *Poller) pollLocked(ctx context.Context) pollOutcome {
 		}
 		res.Snapshot = p.mergeDeltaLocked(res.Snapshot)
 	}
+	p.stats.Success++
 	p.revision = res.Revision
 	p.stats.LastRevision = res.Revision
 	p.snapshot = res.Snapshot

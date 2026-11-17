@@ -62,3 +62,42 @@ func TestPollerMergesDelta(t *testing.T) {
 		t.Fatalf("合并后顺序/内容错误：%v", ids)
 	}
 }
+
+func TestPollerRejectsResyncDelta(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		if requests == 1 {
+			_, _ = w.Write([]byte(`{"revision":1,"policies":[{"id":"p1","version":1,"name":"a","priority":10,"match":{"all":[{"field":"ip","op":"eq","value":"1.1.1.1"}]},"action":{"type":"observe"}}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"revision":2,"snapshot":"delta","base_revision":1,"resync_required":true,"upserts":[{"id":"p2","version":1,"name":"b","priority":20,"match":{"all":[{"field":"ip","op":"eq","value":"2.2.2.2"}]},"action":{"type":"observe"}}],"deletes":[]}`))
+	}))
+	defer srv.Close()
+
+	c, err := agent.New(agent.Config{
+		BaseURL: srv.URL, Token: "tok", GatewayID: "gw", AgentVersion: "gateway/1.0",
+		Capabilities: &agent.Capabilities{Actions: []agent.ActionType{agent.ActionObserve}, MatchFields: []string{"ip"}, MaxRules: 100, DeltaSnapshot: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := New(c, Options{Interval: time.Second, InitialRevision: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Refresh(context.Background()); err != nil {
+		t.Fatalf("首次全量失败：%v", err)
+	}
+	if err := p.Refresh(context.Background()); err == nil {
+		t.Fatal("resync_required 的 delta 应被拒绝")
+	}
+	snap := p.Snapshot()
+	if snap == nil || snap.Revision != 1 || len(snap.Policies) != 1 || snap.Policies[0].ID != "p1" {
+		t.Fatalf("拒绝 delta 后应保留旧快照：%+v", snap)
+	}
+	if p.revision != -1 {
+		t.Fatalf("拒绝 delta 后 revision 应为 -1，实际 %d", p.revision)
+	}
+}
