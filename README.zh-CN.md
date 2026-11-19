@@ -37,7 +37,7 @@
 ## 要求
 
 - Go 1.22+
-- 已部署的 shield-x 与租户 Token
+- 已部署的 shield-x 与站点 Token
 - 能访问 shield-x 的 base URL（包含 `/shieldx` 前缀）
 
 ## 安装
@@ -150,12 +150,12 @@ go test -tags=contract_probe -v ./probe
 | 环境变量 | 必填 | 用途 |
 |---|---|---|
 | `SHIELDX_BASE_URL` | 是 | 含 `/shieldx` 的基地址 |
-| `SHIELDX_TOKEN` | 是 | 租户 Token |
+| `SHIELDX_TOKEN` | 是 | 站点 Token |
 | `SHIELDX_GATEWAY_ID` | 否 | 默认 `gw-probe-01` |
-| `SHIELDX_PROBE_EMPTY_TOKEN` | 否 | 空策略租户用例（P4） |
-| `SHIELDX_PROBE_TOKEN_B` | 否 | 跨租户隔离用例（P9） |
+| `SHIELDX_PROBE_EMPTY_TOKEN` | 否 | 空策略站点用例（P4） |
+| `SHIELDX_PROBE_TOKEN_B` | 否 | 跨站点隔离用例（P9） |
 
-未设置必填变量时整体 Skip。P8（429 + `Retry-After`）在服务端无法触发限流时 Skip；P9 需要两个租户都有策略。
+未设置必填变量时整体 Skip。P8（429 + `Retry-After`）在服务端无法触发限流时 Skip；P9 需要两个站点都有策略。
 
 ## 兼容性
 

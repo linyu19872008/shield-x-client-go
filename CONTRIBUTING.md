@@ -30,7 +30,7 @@ Add or update contract fixtures and the probe in the same pull request.
 - Keep changes focused; avoid mixing refactors with behavior changes.
 - Add tests for new behavior and failure paths.
 - Update `CHANGELOG.md` for user-visible changes.
-- Do not commit tokens, private keys, tenant data, or `.codegraph/`.
+- Do not commit tokens, private keys, site data, or `.codegraph/`.
 - Use clear commit messages; conventional commits are welcome but not required.
 
 ## Reporting bugs

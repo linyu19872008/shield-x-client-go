@@ -263,6 +263,9 @@ func (c *Client) setCommonHeaders(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
 	req.Header.Set("User-Agent", c.cfg.UserAgent)
 	req.Header.Set("X-Shieldx-Agent-Version", c.cfg.AgentVersion)
+	if c.cfg.GatewayGroup != "" {
+		req.Header.Set("X-Shieldx-Gateway-Group", c.cfg.GatewayGroup)
+	}
 	if c.capsHash != "" {
 		req.Header.Set("X-Shieldx-Caps-Hash", c.capsHash)
 	}

@@ -24,11 +24,15 @@ type Config struct {
 	// 例：http://shield-x.internal:8080/shieldx
 	BaseURL string
 
-	// Token 是租户级 Bearer Token，形如 sx_xxx。
+	// Token 是站点级 Bearer Token，形如 sx_xxx。
 	Token string
 
-	// GatewayID 为 1~64 字符，[A-Za-z0-9._-]，租户内唯一且稳定。
+	// GatewayID 为 1~64 字符，[A-Za-z0-9._-]，站点内唯一且稳定。
 	GatewayID string
+
+	// GatewayGroup 是站点内的网关集群标签（可选，≤64 字符）。
+	// 写入 X-Shieldx-Gateway-Group，用于按集群定向策略与分组展示。
+	GatewayGroup string
 
 	// AgentVersion 是 gateway 自身版本，写入 X-Shieldx-Agent-Version 与批次 agent_version。
 	// 例：gateway/1.4.2。必填——身份不能靠猜。
@@ -70,6 +74,14 @@ func (c Config) Validate() error {
 	}
 	if !gatewayIDPattern.MatchString(c.GatewayID) {
 		return fmt.Errorf("%w: GatewayID 必须是 1~64 个 [A-Za-z0-9._-] 字符", ErrInvalidConfig)
+	}
+	if len(c.GatewayGroup) > 64 {
+		return fmt.Errorf("%w: GatewayGroup 不能超过 64 字节", ErrInvalidConfig)
+	}
+	for _, r := range c.GatewayGroup {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("%w: GatewayGroup 不能包含控制字符", ErrInvalidConfig)
+		}
 	}
 	if strings.TrimSpace(c.AgentVersion) == "" {
 		return fmt.Errorf("%w: AgentVersion 必填", ErrInvalidConfig)

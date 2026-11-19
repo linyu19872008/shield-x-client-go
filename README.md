@@ -37,7 +37,7 @@ Go client for integrating a gateway with **shield-x**: pull policy snapshots, pu
 ## Requirements
 
 - Go 1.22+
-- A shield-x deployment and a tenant token
+- A shield-x deployment and a site token
 - Network access to the shield-x base URL (which includes the `/shieldx` prefix)
 
 ## Install
@@ -150,12 +150,12 @@ go test -tags=contract_probe -v ./probe
 | Variable | Required | Purpose |
 |---|---|---|
 | `SHIELDX_BASE_URL` | yes | Base URL including `/shieldx` |
-| `SHIELDX_TOKEN` | yes | Tenant token |
+| `SHIELDX_TOKEN` | yes | Site token |
 | `SHIELDX_GATEWAY_ID` | no | Defaults to `gw-probe-01` |
-| `SHIELDX_PROBE_EMPTY_TOKEN` | no | Empty-tenant case (P4) |
-| `SHIELDX_PROBE_TOKEN_B` | no | Cross-tenant isolation case (P9) |
+| `SHIELDX_PROBE_EMPTY_TOKEN` | no | Empty-site case (P4) |
+| `SHIELDX_PROBE_TOKEN_B` | no | Cross-site isolation case (P9) |
 
-Missing required variables skip the probe. P8 (429 + `Retry-After`) is skipped unless the server can trigger rate limiting; P9 requires both tenants to have policies.
+Missing required variables skip the probe. P8 (429 + `Retry-After`) is skipped unless the server can trigger rate limiting; P9 requires both sites to have policies.
 
 ## Compatibility
 

@@ -35,6 +35,7 @@ func newTestClient(t *testing.T, h http.Handler, mutate ...func(*Config)) *Clien
 		BaseURL:      srv.URL + "/shieldx",
 		Token:        "sx_test_token",
 		GatewayID:    "gw-test-01",
+		GatewayGroup: "blue",
 		AgentVersion: "gateway/1.4.2",
 		Capabilities: &Capabilities{
 			Actions:             []ActionType{ActionObserve, ActionBlock},
@@ -128,6 +129,9 @@ func TestFetchPoliciesOK(t *testing.T) {
 	}
 	if v := got.header.Get("X-Shieldx-Gateway-Id"); v != "gw-test-01" {
 		t.Fatalf("Gateway-Id = %q", v)
+	}
+	if v := got.header.Get("X-Shieldx-Gateway-Group"); v != "blue" {
+		t.Fatalf("Gateway-Group = %q", v)
 	}
 	if v := got.header.Get("X-Shieldx-Agent-Version"); v != "gateway/1.4.2" {
 		t.Fatalf("Agent-Version = %q", v)

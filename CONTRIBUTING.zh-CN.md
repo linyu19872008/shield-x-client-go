@@ -29,7 +29,7 @@ CI 还会校验零第三方依赖，以及本地缓存没有被提交。
 - 改动聚焦，不把重构和行为变更混在一起。
 - 为新行为和失败路径补测试。
 - 用户可见变更更新 `CHANGELOG.zh-CN.md`。
-- 不提交 Token、私钥、租户数据或 `.codegraph/`。
+- 不提交 Token、私钥、站点数据或 `.codegraph/`。
 - 提交信息清晰；欢迎 conventional commits，但不强制。
 
 ## 报告问题
