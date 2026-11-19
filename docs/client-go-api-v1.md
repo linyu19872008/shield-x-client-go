@@ -43,8 +43,9 @@ type Config struct {
 | Field | Rule |
 |---|---|
 | `BaseURL` | Absolute `http(s)` URL; include the `/shieldx` prefix |
-| `Token` | Tenant bearer token; never logged |
+| `Token` | Site bearer token; never logged |
 | `GatewayID` | 1–64 chars of `[A-Za-z0-9._-]`, stable per gateway |
+| `GatewayGroup` | Optional site-local group label (≤64 chars), sent as `X-Shieldx-Gateway-Group` |
 | `AgentVersion` | Gateway version, sent as `X-Shieldx-Agent-Version` |
 | `Capabilities` | Optional capability declaration |
 | `HTTPClient` / `Transport` | Mutually exclusive; caller owns an injected `HTTPClient` |
@@ -244,7 +245,7 @@ go test -tags=contract_probe -v ./probe
 ```
 
 The probe uses raw HTTP and does not import `agent`. It covers 200/304/401, empty snapshots,
-JSON/NDJSON+gzip, 413, 429 (when triggerable), tenant isolation and invalid bodies.
+JSON/NDJSON+gzip, 413, 429 (when triggerable), site isolation and invalid bodies.
 
 ## 8. Compatibility
 

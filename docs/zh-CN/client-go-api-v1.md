@@ -41,7 +41,7 @@ type Config struct {
 | 字段 | 规则 |
 |---|---|
 | `BaseURL` | 绝对 http(s) 地址；包含 `/shieldx` 前缀 |
-| `Token` | 租户 Bearer Token；不写日志 |
+| `Token` | 站点 Bearer Token；不写日志 |
 | `GatewayID` | 1–64 个 `[A-Za-z0-9._-]` 字符，网关内稳定 |
 | `AgentVersion` | 网关版本，写入 `X-Shieldx-Agent-Version` |
 | `Capabilities` | 可选能力声明 |
@@ -237,7 +237,7 @@ go test -tags=contract_probe -v ./probe
 ```
 
 探针使用裸 HTTP，不 import `agent`。覆盖 200/304/401、空快照、JSON/NDJSON+gzip、413、
-429（可触发时）、跨租户隔离与非法 body。
+429（可触发时）、跨站点隔离与非法 body。
 
 ## 8. 兼容性
 

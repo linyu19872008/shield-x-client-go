@@ -7,6 +7,16 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+
+- 可选 `Config.GatewayGroup`，以 `X-Shieldx-Gateway-Group` 上报，用于按网关集群定向策略。
+
+### 变更
+
+- 术语 tenant → site（代码、文档、探针）；线上协议不变。
+
 ## [v0.1.1] - 2026-11-14
 
 ### 修复

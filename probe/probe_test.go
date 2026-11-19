@@ -175,15 +175,15 @@ func TestP2PoliciesAnd304(t *testing.T) {
 	}
 }
 
-func TestP4EmptyTenant(t *testing.T) {
+func TestP4EmptySite(t *testing.T) {
 	c := newProbe(t)
 	token := os.Getenv("SHIELDX_PROBE_EMPTY_TOKEN")
 	if token == "" {
-		t.Skip("未设置 SHIELDX_PROBE_EMPTY_TOKEN，跳过空策略租户用例")
+		t.Skip("未设置 SHIELDX_PROBE_EMPTY_TOKEN，跳过空策略站点用例")
 	}
 	status, _, body := c.do(t, http.MethodGet, "/policies/v1", nil, policiesHeaders(c), token)
 	if status != http.StatusOK {
-		t.Fatalf("空策略租户状态码 = %d，期望 200（body=%s）", status, truncate(body))
+		t.Fatalf("空策略站点状态码 = %d，期望 200（body=%s）", status, truncate(body))
 	}
 	var snap struct {
 		Revision int64             `json:"revision"`
@@ -193,7 +193,7 @@ func TestP4EmptyTenant(t *testing.T) {
 		t.Fatalf("解析快照失败: %v", err)
 	}
 	if len(snap.Policies) != 0 {
-		t.Fatalf("空策略租户返回了 %d 条策略", len(snap.Policies))
+		t.Fatalf("空策略站点返回了 %d 条策略", len(snap.Policies))
 	}
 }
 
@@ -249,7 +249,7 @@ func TestP5JSONBatch(t *testing.T) {
 		t.Fatalf("accepted+rejected=%d 大于发送数 %d", out.Accepted+out.Rejected, len(events))
 	}
 	if out.Accepted+out.Rejected != len(events) {
-		t.Logf("注意：accepted+rejected=%d < 发送数 %d（租户采样会丢弃事件）", out.Accepted+out.Rejected, len(events))
+		t.Logf("注意：accepted+rejected=%d < 发送数 %d（站点采样会丢弃事件）", out.Accepted+out.Rejected, len(events))
 	}
 }
 
@@ -315,17 +315,17 @@ func TestP8RateLimit(t *testing.T) {
 	t.Skip("429 需要服务端限流或队列压力，默认跳过；429 的 Retry-After 由 shield-x 单测覆盖")
 }
 
-func TestP9TenantIsolation(t *testing.T) {
+func TestP9SiteIsolation(t *testing.T) {
 	c := newProbe(t)
 	tokenB := os.Getenv("SHIELDX_PROBE_TOKEN_B")
 	if tokenB == "" {
-		t.Skip("未设置 SHIELDX_PROBE_TOKEN_B，跳过跨租户隔离用例")
+		t.Skip("未设置 SHIELDX_PROBE_TOKEN_B，跳过跨站点隔离用例")
 	}
 
 	idsA := fetchPolicyIDs(t, c, c.token)
 	idsB := fetchPolicyIDs(t, c, tokenB)
 	if len(idsA) == 0 || len(idsB) == 0 {
-		t.Skip("至少一个租户没有策略，无法验证隔离")
+		t.Skip("至少一个站点没有策略，无法验证隔离")
 	}
 
 	set := make(map[string]bool, len(idsA))
@@ -334,7 +334,7 @@ func TestP9TenantIsolation(t *testing.T) {
 	}
 	for _, id := range idsB {
 		if set[id] {
-			t.Fatalf("跨租户泄漏：租户 B 看到了租户 A 的策略 %s", id)
+			t.Fatalf("跨站点泄漏：站点 B 看到了站点 A 的策略 %s", id)
 		}
 	}
 }

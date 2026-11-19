@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在 CI 中启动一个真实 shield-x，建租户/Token，然后跑 client-go 契约探针。
+# 在 CI 中启动一个真实 shield-x，建站点/Token，然后跑 client-go 契约探针。
 #
 # 约定：
 #   - 当前目录是 shield-x-client-go 仓库根
@@ -21,7 +21,7 @@ fi
 
 export SHIELDX_DB_DSN="root:11111111@tcp(127.0.0.1:3306)/${DB}?parseTime=true&loc=UTC"
 export SHIELDX_SUPER_ADMIN_PASSWORD="Passw0rd!123"
-export SHIELDX_LISTEN_AGENT="127.0.0.1:18080"
+export SHIELDX_LISSITE_AGENT="127.0.0.1:18080"
 export SHIELDX_LISTEN_CONSOLE="127.0.0.1:18081"
 
 cleanup() {
@@ -78,18 +78,18 @@ LOGIN="$(curl -sS -c "$JAR" -X POST "$CONSOLE/auth/login" \
   -d '{"username":"super_admin","password":"Probe!Passw0rd123"}')"
 CSRF="$(printf '%s' "$LOGIN" | python3 -c 'import sys,json;print(json.load(sys.stdin)["csrf_token"])')"
 
-create_tenant() {
+create_site() {
   local name="$1"
-  curl -sS -b "$JAR" -X POST "$CONSOLE/tenants" \
+  curl -sS -b "$JAR" -X POST "$CONSOLE/sites" \
     -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' \
     -d "{\"name\":\"${name}\",\"generate_token\":true}"
 }
 
-echo "== create tenants =="
-TEN_A="$(create_tenant "ci-probe-a")"
-TEN_B="$(create_tenant "ci-probe-b")"
-TOK_A="$(printf '%s' "$TEN_A" | python3 -c 'import sys,json;print(json.load(sys.stdin)["token_plaintext"])')"
-TOK_B="$(printf '%s' "$TEN_B" | python3 -c 'import sys,json;print(json.load(sys.stdin)["token_plaintext"])')"
+echo "== create sites =="
+SITE_A="$(create_site "ci-probe-a")"
+SITE_B="$(create_site "ci-probe-b")"
+TOK_A="$(printf '%s' "$SITE_A" | python3 -c 'import sys,json;print(json.load(sys.stdin)["token_plaintext"])')"
+TOK_B="$(printf '%s' "$SITE_B" | python3 -c 'import sys,json;print(json.load(sys.stdin)["token_plaintext"])')"
 
 echo "== run contract probe =="
 cd "$ROOT"
